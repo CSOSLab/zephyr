@@ -164,6 +164,23 @@ static void bme680_calc_gas_resistance(struct bme680_data *data, uint8_t gas_ran
 					    / (int64_t)var2);
 }
 
+static void bme688_calc_gas_resistance_high(struct bme680_data *data, uint8_t gas_range,
+				       uint16_t adc_gas_res)
+{
+    uint32_t calc_gas_res;
+    uint32_t var1 = UINT32_C(262144) >> gas_range;
+    int32_t var2 = (int32_t)adc_gas_res - INT32_C(512);
+
+    var2 *= INT32_C(3);
+    var2 = INT32_C(4096) + var2;
+
+    /* multiplying 10000 then dividing then multiplying by 100 instead of multiplying by 1000000 to prevent overflow */
+    calc_gas_res = (UINT32_C(10000) * var1) / (uint32_t)var2;
+    calc_gas_res = calc_gas_res * 100;
+
+	data->calc_gas_resistance = calc_gas_res;
+}
+
 static uint8_t bme680_calc_res_heat(struct bme680_data *data, uint16_t heatr_temp)
 {
 	uint8_t heatr_res;
@@ -224,21 +241,25 @@ static int bme680_sample_fetch(const struct device *dev,
 	}
 
 	data->new_data = buff[0] & BME680_MSK_NEW_DATA;
-	data->heatr_stab = buff[14] & BME680_MSK_HEATR_STAB;
+	// data->heatr_stab = buff[14] & BME680_MSK_HEATR_STAB;
+	data->heatr_stab = buff[16] & BME680_MSK_HEATR_STAB;
 
 	adc_press = (uint32_t)(((uint32_t)buff[2] << 12) | ((uint32_t)buff[3] << 4)
 			    | ((uint32_t)buff[4] >> 4));
 	adc_temp = (uint32_t)(((uint32_t)buff[5] << 12) | ((uint32_t)buff[6] << 4)
 			   | ((uint32_t)buff[7] >> 4));
 	adc_hum = (uint16_t)(((uint32_t)buff[8] << 8) | (uint32_t)buff[9]);
-	adc_gas_res = (uint16_t)((uint32_t)buff[13] << 2 | (((uint32_t)buff[14]) >> 6));
-	gas_range = buff[14] & BME680_MSK_GAS_RANGE;
+	// adc_gas_res = (uint16_t)((uint32_t)buff[13] << 2 | (((uint32_t)buff[14]) >> 6));
+	adc_gas_res = (uint16_t)((uint32_t)buff[15] << 2 | (((uint32_t)buff[16]) >> 6));
+	// gas_range = buff[14] & BME680_MSK_GAS_RANGE;
+	gas_range = buff[16] & BME680_MSK_GAS_RANGE;
 
 	if (data->new_data) {
 		bme680_calc_temp(data, adc_temp);
 		bme680_calc_press(data, adc_press);
 		bme680_calc_humidity(data, adc_hum);
-		bme680_calc_gas_resistance(data, gas_range, adc_gas_res);
+		// bme680_calc_gas_resistance(data, gas_range, adc_gas_res);
+		bme688_calc_gas_resistance_high(data, gas_range, adc_gas_res);
 	}
 
 	/* Trigger the next measurement */
@@ -410,8 +431,21 @@ static int bme680_init(const struct device *dev)
 		return err;
 	}
 
+	// err = bme680_reg_write(dev, BME680_REG_CTRL_GAS_1,
+	// 		       BME680_CTRL_GAS_1_VAL);
+	// if (err < 0) {
+	// 	return err;
+	// }
+	err = bme680_reg_write(dev, BME680_REG_CTRL_GAS_0,
+			    	0);	//BME68X_ENABLE_HEATER	0x00
+	if (err < 0) {
+		return err;
+	}
+
+	uint8_t gas_1_ctrl_val;
+	gas_1_ctrl_val = BME680_CTRL_GAS_1_VAL | 0xa0;
 	err = bme680_reg_write(dev, BME680_REG_CTRL_GAS_1,
-			       BME680_CTRL_GAS_1_VAL);
+					gas_1_ctrl_val);
 	if (err < 0) {
 		return err;
 	}

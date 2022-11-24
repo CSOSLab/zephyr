@@ -57,7 +57,8 @@ struct bme680_config {
 
 #define BME680_CHIP_ID                  0x61
 
-#define BME680_LEN_FIELD                15
+// #define BME680_LEN_FIELD                15
+#define BME680_LEN_FIELD                17
 #define BME680_LEN_COEFF_ALL            42
 #define BME680_LEN_COEFF1               23
 #define BME680_LEN_COEFF2               14
